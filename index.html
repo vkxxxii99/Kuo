@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SPACE ULTRA - FIX</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Arial Black', sans-serif; color: #fff; user-select: none; }
+        canvas { display: block; }
+        
+        /* اللوبي */
+        #lobby { position: absolute; inset: 0; background: radial-gradient(circle, #1a0b2e 0%, #000 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .btn { width: 280px; padding: 15px; margin: 10px; border: 2px solid #0ff; background: rgba(0, 255, 255, 0.1); color: #0ff; font-size: 20px; cursor: pointer; border-radius: 10px; }
+        input { padding: 12px; font-size: 18px; border-radius: 5px; border: 1px solid #0ff; background: #000; color: #0ff; text-align: center; margin: 10px; }
+        
+        /* واجهة اللعب */
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
+        .hud { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 24px; color: #0ff; text-shadow: 0 0 10px #0ff; }
+        #code-display { position: absolute; top: 50px; width: 100%; text-align: center; color: #f0f; font-size: 14px; }
+
+        /* أزرار الجوال (تختفي في الكمبيوتر) */
+        #mobile-btns { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; gap: 10px; pointer-events: auto; }
+        @media (pointer: coarse) { #mobile-btns { display: flex; } }
+        .t-btn { width: 65px; height: 65px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; color: #0ff; border-radius: 50%; font-size: 25px; }
+    </style>
+</head>
+<body>
+
+    <!-- اللوبي -->
+    <div id="lobby">
+        <h1 style="color:#0ff; font-size: 40px;">SPACE ARENA</h1>
+        <div id="main-menu">
+            <button class="btn" onclick="startMode('solo')">لعب فردي (SOLO)</button>
+            <button class="btn" onclick="showMulti()">لعب مع صديق (ONLINE)</button>
+        </div>
+        <div id="multi-menu" style="display:none;">
+            <p id="gen-code" style="color:#f0f; font-size: 20px;"></p>
+            <input type="text" id="input-code" placeholder="أدخل كود الصديق">
+            <button class="btn" onclick="startMode('multi')">دخول (JOIN)</button>
+            <button class="btn" style="border-color:#f33; color:#f33" onclick="location.reload()">رجوع</button>
+        </div>
+    </div>
+
+    <!-- واجهة اللعب -->
+    <div id="game-ui">
+        <div class="hud">SCORE: <span id="score">0</span></div>
+        <div id="code-display"></div>
+        <div id="mobile-btns">
+            <button class="t-btn" style="width:80px; border-color:#f0f; color:#f0f" onpointerdown="shoot()">FIRE</button>
+            <button class="t-btn" onpointerdown="keys.Up=true" onpointerup="keys.Up=false">▲</button>
+            <div style="display:flex; gap:40px;">
+                <button class="t-btn" onpointerdown="keys.Left=true" onpointerup="keys.Left=false">◀</button>
+                <button class="t-btn" onpointerdown="keys.Right=true" onpointerup="keys.Right=false">▶</button>
+            </div>
+            <button class="t-btn" onpointerdown="keys.Down=true" onpointerup="keys.Down=false">▼</button>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let gameActive = false, score = 0, myCode = "";
+        let player = { x: 0, y: 0, r: 20 }, target = { x: 0, y: 0, r: 15 };
+        let bullets = [], enemies = [], stars = [], keys = {};
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.onresize = resize; resize();
+
+        function showMulti() {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('multi-menu').style.display = 'flex';
+            myCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('gen-code').innerText = "كودك هو: " + myCode;
+        }
+
+        function startMode(mode) {
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'block';
+            if(mode === 'multi') document.getElementById('code-display').innerText = "متصل بالغرفة: " + (document.getElementById('input-code').value || myCode);
+            player.x = canvas.width/2; player.y = canvas.height-100;
+            spawnTarget();
+            gameActive = true;
+            loop();
+        }
+
+        function spawnTarget() {
+            target.x = 50 + Math.random() * (canvas.width - 100);
+            target.y = 50 + Math.random() * (canvas.height / 2);
+        }
+
+        function shoot() { bullets.push({ x: player.x, y: player.y - 20 }); }
+
+        window.onkeydown = e => {
+            if(e.code === "ArrowUp" || e.code === "KeyW") keys.Up = true;
+            if(e.code === "ArrowDown" || e.code === "KeyS") keys.Down = true;
+            if(e.code === "ArrowLeft" || e.code === "KeyA") keys.Left = true;
+            if(e.code === "ArrowRight" || e.code === "KeyD") keys.Right = true;
+            if(e.code === "Space" || e.code === "Enter") shoot();
+        };
+        window.onkeyup = e => {
+            if(e.code === "ArrowUp" || e.code === "KeyW") keys.Up = false;
+            if(e.code === "ArrowDown" || e.code === "KeyS") keys.Down = false;
+            if(e.code === "ArrowLeft" || e.code === "KeyA") keys.Left = false;
+            if(e.code === "ArrowRight" || e.code === "KeyD") keys.Right = false;
+        };
+
+        // دعم الكنترولر
+        function checkGamepad() {
+            const gps = navigator.getGamepads();
+            if(gps[0]) {
+                const gp = gps[0];
+                if(gp.axes[1] < -0.3) player.y -= 7;
+                if(gp.axes[1] > 0.3) player.y += 7;
+                if(gp.axes[0] < -0.3) player.x -= 7;
+                if(gp.axes[0] > 0.3) player.x += 7;
+                if(gp.buttons[0].pressed || gp.buttons[7].pressed) {
+                    if(!keys.gpFire) { shoot(); keys.gpFire = true; setTimeout(()=>keys.gpFire=false, 200); }
+                }
+            }
+        }
+
+        for(let i=0; i<80; i++) stars.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, v:Math.random()*2+1});
+
+        function loop() {
+            if(!gameActive) return;
+            ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fillRect(0,0, canvas.width, canvas.height);
+            checkGamepad();
+
+            // النجوم والحركة
+            stars.forEach(s => { ctx.fillStyle="#fff"; ctx.fillRect(s.x, s.y, 2, 2); s.y += s.v; if(s.y>canvas.height) s.y=0; });
+            if(keys.Up) player.y -= 7; if(keys.Down) player.y += 7;
+            if(keys.Left) player.x -= 7; if(keys.Right) player.x += 7;
+
+            // رسم الهدف الأخضر
+            ctx.fillStyle = "#0f0"; ctx.shadowBlur = 20; ctx.shadowColor = "#0f0";
+            ctx.beginPath(); ctx.arc(target.x, target.y, target.r, 0, Math.PI*2); ctx.fill();
+
+            // رسم اللاعب
+            ctx.strokeStyle = "#0ff"; ctx.shadowColor = "#0ff"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(player.x, player.y-20); ctx.lineTo(player.x-15, player.y+15); ctx.lineTo(player.x+15, player.y+15); ctx.closePath(); ctx.stroke();
+
+            // الرصاص والاصطدام
+            bullets.forEach((b, i) => {
+                b.y -= 10; ctx.fillStyle = "#f0f"; ctx.fillRect(b.x-2, b.y, 4, 15);
+                if(Math.hypot(b.x - target.x, b.y - target.y) < 25) {
+                    score += 100; document.getElementById("score").innerText = score;
+                    spawnTarget(); bullets.splice(i, 1);
+                }
+            });
+
+            requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+</html>
